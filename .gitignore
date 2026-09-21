@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# 工作目录：取本、中间产物、压缩材料包都在这，可随时重建，不入库
+work/
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/

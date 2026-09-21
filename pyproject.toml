@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "book-distiller"
+version = "0.1.0"
+description = "把一本书变成可执行的方法论：先压缩、再提炼、每条结论可回查原文、质检真检查"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["distillation", "book", "knowledge", "llm", "methodology", "chinese"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Natural Language :: Chinese (Simplified)",
+]
+dependencies = []
+
+[project.optional-dependencies]
+pdf = ["pypdf>=3.0"]
+
+[project.scripts]
+dz = "dz:main"
+
+[tool.setuptools]
+py-modules = ["dz"]
+packages = ["dzlib"]
