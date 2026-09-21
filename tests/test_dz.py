@@ -107,6 +107,74 @@ class ChapterSplitTests(unittest.TestCase):
         book = ingest_mod.build(title="x", text=MD_SAMPLE)
         self.assertEqual(len(book.chapters), 3)
 
+    def test_english_headings_split(self):
+        """Gutenberg 英文书常见三种写法都要认：全大写罗马、首字母大写罗马、阿拉伯数字。"""
+        text = (
+            "Chapter I. LAYING PLANS\n\n"
+            "Sun Tzŭ said: the art of war is of vital importance to the State.\n\n"
+            "CHAPTER XII. THE ATTACK BY FIRE\n\n"
+            "There are five ways of attacking with fire.\n\n"
+            "Chapter 3. ATTACK BY STRATAGEM\n\n"
+            "The best thing of all is to take the enemy's country whole.\n"
+        )
+        book = ingest_mod.build(title="x", text=text)
+        self.assertEqual(len(book.chapters), 3)
+        self.assertEqual(book.chapters[0].title, "Chapter I. LAYING PLANS")
+        self.assertEqual(book.chapters[1].title, "CHAPTER XII. THE ATTACK BY FIRE")
+        self.assertEqual(book.chapters[2].title, "Chapter 3. ATTACK BY STRATAGEM")
+
+    def test_english_sentence_is_not_a_heading(self):
+        """小写 chapter 开头的普通句子不能被当成标题（标题部分含句点即排除）。"""
+        text = (
+            "Chapter 1 is about planning and how it decides the outcome.\n\n"
+            "Chapter 2 is about waging war and the cost of a long campaign.\n\n"
+            "That is all.\n"
+        )
+        book = ingest_mod.build(title="x", text=text)
+        self.assertEqual(len(book.chapters), 1, "普通句子不该触发切章")
+        self.assertEqual(book.chapters[0].title, "正文")
+
+    def test_toc_entries_are_dropped(self):
+        """目录页里紧挨着排列的章标题要整块丢掉，只留正文那份。"""
+        body_a = "真正的第一章正文。" * 60
+        body_b = "真正的第二章正文。" * 60
+        text = (
+            "Contents\n\n"
+            "Chapter I. Laying plans\n"
+            "Chapter II. Waging War\n"
+            "Chapter III. Attack by Stratagem\n"
+            "\n"
+            f"Chapter I. LAYING PLANS\n\n{body_a}\n\n"
+            f"Chapter II. WAGING WAR\n\n{body_b}\n"
+        )
+        book = ingest_mod.build(title="x", text=text)
+        titles = [c.title for c in book.chapters]
+        # 目录三项被丢弃；剩下的正文两章 + 前面的 "Contents" 成了前言
+        self.assertNotIn("Chapter III. Attack by Stratagem", titles, f"目录项没被丢掉：{titles}")
+        self.assertNotIn("Chapter I. Laying plans", titles)
+        self.assertEqual(titles.count("Chapter I. LAYING PLANS"), 1)
+        self.assertEqual(titles.count("Chapter II. WAGING WAR"), 1)
+        self.assertEqual(len(body_a), len(book.chapters[1].text))
+        self.assertEqual([c.idx for c in book.chapters], list(range(1, len(titles) + 1)))
+
+    def test_dense_headings_with_long_bodies_are_not_toc(self):
+        """标题挨得近但每章都有实质内容时，不能误判成目录。"""
+        seg = "有实质内容的一段话。" * 20
+        text = "\n\n".join(f"第{n}章 标题\n{seg}" for n in "一二三四")
+        book = ingest_mod.build(title="x", text=text)
+        self.assertEqual(len(book.chapters), 4, "有内容的章不该被当目录丢掉")
+
+    def test_same_title_across_volumes_is_kept(self):
+        """分卷同名章（两份都有实质内容）不能被误当成目录项丢掉。"""
+        vol1 = "卷一的第一章内容。" * 50
+        vol2 = "卷二的同名第一章内容。" * 50
+        text = (
+            f"Chapter I. LAYING PLANS\n\n{vol1}\n\n"
+            f"Chapter I. LAYING PLANS\n\n{vol2}\n"
+        )
+        book = ingest_mod.build(title="x", text=text)
+        self.assertEqual(len(book.chapters), 2, "同名但都有内容，应保留两份")
+
     def test_no_heading_single_chapter(self):
         book = ingest_mod.build(title="x", text="就一段话，没有标题。\n\n还有一段。")
         self.assertEqual(len(book.chapters), 1)

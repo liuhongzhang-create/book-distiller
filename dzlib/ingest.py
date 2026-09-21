@@ -16,10 +16,14 @@ HEAD_PATTERNS = [
     re.compile(r"^==\s*(.+?)\s*==\s*$"),                                  # 维基文库
     re.compile(r"^#{1,3}\s+(.+?)\s*#*\s*$"),                              # markdown
     re.compile(r"^(第[一二三四五六七八九十百千零〇\d]{1,6}[章回節节篇卷部][^\n]{0,30})$"),
-    re.compile(r"^(CHAPTER\s+[IVXLC\d]{1,6}\.?\s*[^\n]{0,60})$"),
-    re.compile(r"^(Chapter\s+\d{1,3}\.?\s*[^\n]{0,60})$"),
+    # 英文书的章节标题：CHAPTER/Chapter + 罗马或阿拉伯数字，标题可有可无。
+    # 限制标题部分不含句点，避免把小写开头的普通句子（"Chapter 1 is about..."）误当标题。
+    re.compile(r"^(chapter\s+[IVXLC\d]{1,6}\.?(?:\s+[^\n.]{1,60})?)$", re.I),
 ]
 MIN_CHAPTERS = 2
+TOC_MIN_RUN = 3        # 连续多少个紧邻标题才判为目录
+TOC_MAX_GAP = 1        # 相邻标题的行距 <= 此值算「紧邻」
+TOC_ENTRY_MAX = 300    # 目录条目的正文长度上限（超过就不像目录）
 BOILERPLATE = re.compile(r"^\s*(?:\[?\d+\]?|Page \d+|p\.\s*\d+)\s*$", re.I)
 
 
@@ -87,10 +91,39 @@ def split_paragraphs(text: str) -> list:
     return paras
 
 
+def _body_len(marks: list, i: int, lines: list) -> int:
+    end = marks[i + 1][0] if i + 1 < len(marks) else len(lines)
+    return len("\n".join(lines[marks[i][0] + 1 : end]).strip())
+
+
+def _toc_drop_indexes(marks: list, lines: list) -> set:
+    """找出目录区，返回要丢弃的 marks 下标。
+
+    目录页的特征是十几个章标题**紧挨着**排列（中间几乎没正文），而正文里
+    章节标题之间必定隔着大段内容。所以「紧邻」是区分二者的可靠信号；
+    再加一道「条目正文都极短」的复核，避免误伤标题连续排布的诗集之类。
+    """
+    drop = set()
+    i = 0
+    while i < len(marks):
+        j = i
+        while j + 1 < len(marks) and marks[j + 1][0] - marks[j][0] <= TOC_MAX_GAP:
+            j += 1
+        run = list(range(i, j + 1))
+        # 只复核 run[:-1]：run 的最后一项可能吞掉紧随目录之后的导论/前言正文
+        if len(run) >= TOC_MIN_RUN and all(
+            _body_len(marks, k, lines) <= TOC_ENTRY_MAX for k in run[:-1]
+        ):
+            drop.update(run)
+        i = j + 1
+    return drop
+
+
 def split_chapters(text: str) -> list:
     """按标题切章。找不到标题就整本作一章。"""
+    lines = text.split("\n")
     marks = []
-    for line_no, line in enumerate(text.split("\n")):
+    for line_no, line in enumerate(lines):
         s = line.strip()
         if not s or len(s) > 80:
             continue
@@ -100,7 +133,10 @@ def split_chapters(text: str) -> list:
                 marks.append((line_no, m.group(1).strip()))
                 break
 
-    lines = text.split("\n")
+    toc = _toc_drop_indexes(marks, lines)
+    if toc:
+        marks = [m for k, m in enumerate(marks) if k not in toc]
+
     if len(marks) < MIN_CHAPTERS:
         body = "\n".join(lines).strip()
         return [Chapter(idx=1, title="正文", text=body)] if body else []

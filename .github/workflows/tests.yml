@@ -1,0 +1,49 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unittest:
+    name: 单元测试 (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: 跑测试
+        run: python -m unittest discover -s tests -v
+
+  smoke:
+    name: 离线全链路冒烟
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 冒烟测试
+        run: bash scripts/smoke.sh
+
+  online:
+    name: 真实取本（外网站点）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 维基文库整本取本
+        run: |
+          python dz.py pipe --wikisource 孫子兵法 --out work/sunzi
+          test -f work/sunzi/TASKS.md
+          python dz.py show work/sunzi c01p000
