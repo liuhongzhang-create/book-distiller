@@ -1,5 +1,7 @@
 # 蒸馏工坊 book-distiller
 
+[![tests](https://github.com/liuhongzhang-create/book-distiller/actions/workflows/tests.yml/badge.svg)](https://github.com/liuhongzhang-create/book-distiller/actions/workflows/tests.yml)
+
 把一本书变成**可执行的方法论**——不是读书笔记，是能照着做的流程、判据和检查清单。
 
 零第三方依赖（读 PDF 除外，可选），纯 Python 标准库 + 命令行。产物是普通文件，跟 AI 平台无关。
